@@ -18,4 +18,4 @@ execute:
 
 # put at least 1 link to a previous lab
 
--   [This is Lab 7 link.](https://ood.unity.rc.umass.edu/rnode/gypsum-gpu091.unity.rc.umass.edu/13355/files/Lab7.html)
+-   [This is Lab 7 link.](Lab7.html)
