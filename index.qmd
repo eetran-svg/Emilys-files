@@ -6,16 +6,20 @@ format:
     toc: true
     toc_float: true
     embed-resources: true
-    theme: flatly
+    theme: cerulean
 execute: 
   warning: false
   message: false
 ---
 
-# About Me
+## About Me
 
-# Image
+Hello, this is Emily Tran. I am an undergraduate student at UMass Amherst where I'm learning biology. In my free time, I enjoy outdoor activities like walking and biking. You can see some of my recent lab reports below, which is from one of my classes this semester.
 
-# put at least 1 link to a previous lab
+## Image
 
--   [This is Lab 7 link.](Lab7.html)
+![Here's a photo I took from April 2024.](hot-air.png)
+
+## Links to lab reports
+
+-   [Here](Lab7.html) is a link to Lab 7. This is my most recent assignment.
