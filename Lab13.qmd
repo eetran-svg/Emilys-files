@@ -1,0 +1,25 @@
+---
+title: "Lab 13: Creating a detailed report with explanations from the NEON MAG data"
+author: "Emily Tran"
+format:
+  html:
+    toc: true
+    toc_float: true
+    embed-resources: true
+    theme: cerulean
+execute: 
+  warning: false
+  message: false
+---
+
+```{r}
+library(usethis)
+use_git_config(user.name = "eetran-svg", user.email = "eetran@umass.edu")
+gitcreds::gitcreds_set() 
+```
+
+
+```{r}
+gitcreds::gitcreds_set() 3
+```
+
