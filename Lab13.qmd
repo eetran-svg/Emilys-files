@@ -13,13 +13,26 @@ execute:
 ---
 
 ```{r}
-library(usethis)
-use_git_config(user.name = "eetran-svg", user.email = "eetran@umass.edu")
-gitcreds::gitcreds_set() 
+.libPaths(c("/home/eetran_umass_edu/R/x86_64-pc-linux-gnu-library/4.4", "/usr/local/lib/R/site-library", "/usr/local/lib/R/library"))
 ```
 
+Link: [Lab13](Lab13.html)
+
+
+
+## Load libraries
 
 ```{r}
-gitcreds::gitcreds_set() 3
+library(tidyverse)
+library(lubridate)
+library(DT)
+library(viridis)
+library(janitor)
+library(plotly)
+library(respirometry)
 ```
 
+```{r}
+# read my data frame 
+df <- read.csv("NEON_soilMAGs_soilChem.csv")
+```
