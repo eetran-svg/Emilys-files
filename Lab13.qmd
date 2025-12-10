@@ -6,7 +6,7 @@ format:
     toc: true
     toc_float: true
     embed-resources: true
-    theme: cerulean
+    theme: minty
 execute: 
   warning: false
   message: false
@@ -16,23 +16,291 @@ execute:
 .libPaths(c("/home/eetran_umass_edu/R/x86_64-pc-linux-gnu-library/4.4", "/usr/local/lib/R/site-library", "/usr/local/lib/R/library"))
 ```
 
-Link: [Lab13](Lab13.html)
+# MAG Community Composition, Alpha Diversity, and Visualization
 
+First, this loads the packages needed and controls rendering output.
 
-
-## Load libraries
-
-```{r}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 library(tidyverse)
-library(lubridate)
-library(DT)
-library(viridis)
+library(vegan)
 library(janitor)
-library(plotly)
-library(respirometry)
 ```
 
-```{r}
-# read my data frame 
-df <- read.csv("NEON_soilMAGs_soilChem.csv")
+## Introduction
+
+Outline of the analysis in this lab report:
+
+-   Prepare by parsing the `genomicsSampleID` column
+-   Prepare abundance data (*this is because the data set does not include information about MAG abundance, so we need to obtain that and store it as an abundance matrix*)
+-   Now we can start the analysis:
+    -   Taxonomic profiling: by phylum and by genus
+    -   Diversity: alpha-diversity
+    -   Visualization: mapping global distribtion of MAG samples on an interactive map
+
+I ended up leaving out beta-diversity because it became complicated with matrix and missing values. So, I decided to visualize three measures of alpha diveristy.
+
+The goals of this analysis are to visualize the abundance of microbial taxonomic groups within NEON soil MAGs. Next, to assess the species richness and species evenness by site (alpha diversity). Last, I thought it would be interesting to be able to visualize where these soil MAG samples were collected on an interactive global map. Hopefully all is correct because it is my first time to do this.
+
+AI helped me with analyzing my NEON soil metagenome-assembled genomes in this lab report. The file used is `NEON_soilMAGs_soilChem.csv`. All writing is my own, same with code comments and certain parts of code. AI was a huge help with code and workflow.
+
+### Load data first
+
+It's important to note that clean_names() changes the name output for a lot of the columns! It takes a column name like `soilMoisture` and puts it in the format `soil_moisture`. So, I have to be mindful about using the correct column names.
+
+```{r load-data}
+mag <- read_csv("NEON_soilMAGs_soilChem.csv") |> clean_names()
 ```
+
+### Preparatory: Parse genomicsSampleID
+
+The format of the `genomicsSampleID` column is "`SITE_SUBPLOT_LAYER_DATE`". Parsing is useful to confirm this information with the rest of the data, where we have the columns `site`, `site_id`, `subplot`, `layer`, and `date`, so this is why we will do parsing here.
+
+```{r parse-id}
+# parse the genomics_sample_id column into separate columns
+mag <- mag |>
+  separate(genomics_sample_id,
+           into = c("site_id2", "subplot2", "layer2", "date2"),
+           sep = "_",
+           remove = FALSE,
+           fill = "right")
+```
+
+### Preparatory: Prepare Abundance Data
+
+Because the data does not include MAG abundance, we have to obtain this information ourselves.
+
+To do this, we should use `genomicsSampleID`. Since we cleaned names, that column is really `genomics_sample_id`. This code counts the number of MAGs per genus.
+
+```{r abundance-matrix}
+abundance_matrix <- mag |>
+  group_by(genomics_sample_id, genus) |>
+  summarise(value = n(), .groups = "drop")
+
+# abundance_matrix
+```
+
+## Taxonomic Profiling
+
+This is the first part of the analysis. Let's look at relative abundance by phylum. Also, let's look at which genera are most common by NEON site. For simplicity, I decided to use site ID instead of site.
+
+### Relative abundance at phylum level
+
+Here we have grouped side_id and phylum so that every site_id and phylum grouping is unique. This allows you to have every phylum, by site_id. From there, we took a count of how many MAGs belonged to each phylum. Using that, we calculated relative abundance.
+
+```{r taxonomic-profiling}
+tax_phylum <- mag |>
+  group_by(site_id, phylum) |>
+  summarize(count = n(), .groups = "drop") |>
+  group_by(site_id) |>
+  mutate(rel_abundance = count / sum(count))
+
+# tax_phylum
+```
+
+#### Let's visualize the phylum composition
+
+We can visualize the relative abundance of phylum across NEON sites by using ggplot to plot `tax_phylum`, from above. It seems that phyla like CSP1-3, Cyanobacteriota, Dependentiae, Halobacteria, Fibrobacterota, and some others are the least common phyla. It looks like the most common phyla are Acidobacteriota, Actinomycetota, Patescibacteria, Pseudomonadota, and some others.
+
+```{r plot-phylum}
+tax_phylum |>
+  ggplot(aes(x = site_id, y = rel_abundance, fill = phylum)) +
+  geom_col() +
+  theme_bw() +
+  labs(title = "Phyla composition across sites",
+       y = "Relative abundance",
+       x = "Site ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+### Genus-level composition
+
+Similarly to phyla analysis, now we are doing genus-level analysis. The idea is the same and we still calculate relative abundance, which will be done in the next code chunk. In this code chunk, we first take the count of MAGs that fall into a specific genus.
+
+```{r genus-top}
+count_genera <- mag |> count(genus, sort = TRUE) |> slice_head(n = 20)
+# count_genera
+```
+
+#### Visualizing genus-level composition
+
+In this code chunk, we calculate relative abundance by genus, then we plot the results.
+
+Looking at this code from AI, I see how it is actually redundant. It counts the number of MAGs for each genus, which is what we already did in the previous code chunk. I think the approach used for the phyla composition in the previous section is more concise.
+
+```{r genus-plot}
+mag |>
+  # we only want the genera that we got MAG counts from, in the previous code chunk. Basically, just want to get our relevant genera
+  filter(genus %in% count_genera$genus) |>
+  
+  # now we count the number of MAGs by genus. We also calculate the relative abundance
+  count(site_id, genus) |>
+  group_by(site_id) |>
+  mutate(rel_abundance = n / sum(n)) |>
+  
+  # now visualize using ggplot
+  ggplot(aes(site_id, rel_abundance, fill = genus)) +
+  geom_col() +
+  labs(title = "Genus-level composition by site",
+       y = "Relative abundance",
+       x = "Site ID") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1))
+```
+
+## Alpha Diversity
+
+Alpha diversity measures species richness and species evenness within a particular area.
+
+-   Species richness is how many unique species there are.
+-   Species evenness is the distribution of those species.
+
+These are some ways how alpha diversity can be measured:
+
+-   **Observed richness** = number of unique species. You can just count them.
+
+-   **Shannon index (H)** = It takes into account both species richness and evenness. Shannon index is also related to the concept of uncertainty (for instance, in a community that has low diversity, if you were to pick a random species, you will be more certain of the identity of that species)
+
+    -   Higher value of H means higher diversity of species in the sample area. Lower value of H means lower diversity. H = 0 means there is only one species in that sample area.
+
+-   **Simpson index (D)** = measures the probability that two randomly selected individuals from a sample would belong to the same species (D) or different species (1-D). For example, the less diversity, the more probability that two randomly selected individuals will be of the same species.
+
+    -   D: The value of Simpson's index can be from 0 to 1, where 0 is high diversity and 1 is no diversity.
+    -   1-D: 0 is no diversity and 1 is high diversity.
+
+```{r alpha-diversity}
+alpha_div <- abundance_matrix |>
+  # group so that diversity is calculated per sample
+  group_by(genomics_sample_id) |>
+  
+  summarise(
+    # counts the number of unique genera per sample
+    richness = n_distinct(genus),
+    
+    # use diversity function to calculate indices
+    # `value` goes back to the abundance_matrix where we counted MAGs per genus
+    shannon  = diversity(value, index = "shannon"),
+    
+    # Here, vegan package calculates 1-D, not D.
+    simpson  = diversity(value, index = "simpson"),
+    .groups = "drop"
+  )
+
+# alpha_div
+```
+
+### Visualizing alpha diversity
+
+#### Shannon index
+
+Shannon index is the most commonly visualized alpha diversity metric, so that is why it is being visualized here first.
+
+The site whose site ID is PUUM appears to have the highest diversity among the sampled sites, according to its Shannon index.
+
+```{r alpha-plot-shannon}
+
+alpha_plot <- alpha_div |>
+  # we only want the genomics_sample_id and site_id columns from the mag data frame, which we will join to alpha_div.   # So now we have a smaller table.
+  left_join(mag |> select(genomics_sample_id, site_id), by = "genomics_sample_id") |>
+  
+  # Visualize using ggplot boxplot
+  ggplot(aes(site_id, shannon)) +
+  geom_boxplot(fill = "lightgreen") +
+  theme_bw() +
+  labs(title = "Shannon diversity across sites",
+       y = "Shannon index",
+       x = "Site (by ID)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+alpha_plot
+```
+
+#### Simpson index
+
+Very generally, Simpson index (reading further, I found that the vegan package calculates 1-D and not D) for all sites is closer to 1, meaning there is high diversity and evenness.
+
+```{r alpha-plot-simpson}
+
+# Same approach as done for Shannon index.
+ap <- alpha_div |>
+  left_join(mag |> select(genomics_sample_id, site_id), by = "genomics_sample_id") |>
+  ggplot(aes(site_id, simpson)) +
+  geom_boxplot(fill = "skyblue") +
+  theme_bw() +
+  labs(title = "Simpson diversity across sites",
+       y = "Simpson index",
+       x = "Site (by ID)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ap
+```
+
+#### Species richness
+
+Lastly, I want to visualize species richness.
+
+The site whose site ID is PUUM has the highest species richness.
+
+```{r species-richness-plot}
+
+# Make sure each sample has a site_id
+rich <- alpha_div |>
+  left_join(mag |> select(genomics_sample_id, site_id) |> distinct(), by = "genomics_sample_id")
+
+# Plot species richness per site
+ggplot(rich, aes(x = site_id, y = richness)) +
+  geom_boxplot(fill = "lavender") +
+  theme_bw() +
+  labs(
+    title = "Species richness across sites",
+    x = "Site (by site ID)",
+    y = "Species richness (number of genera)"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+From the previous visuals, PUUM also had the highest Shannon index (meaning high diversity of species within that sample area). It also had the highest Simpson index (meaning high diversity and evenness).
+
+## Interactive map of MAG samples
+
+Based on what I saw from the alpha diveristy, I thought the site whose ID was PUUM was notable. Looking at this map, several samples were collected from the site corresponding to PUUM, which is found on the island of Hawaii. Notably, as I found through other maps of Hawaii online, this site is surrounded by three volcano sites, including Mauna Kea, Mauna Loa, and Kilauea, with Kilauea being the closest. From online searches, it seems that microbial diversity is not universally highest near volcanoes (which was my first thought), but there seems to be something unique about Hawaii's volcanic environments in particular.
+
+[This paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC9349362/#abstract1) I found from 2022 demonstrated that lava caves and geothermal sites on the island of Hawaii harbors unique microbial communities, where there's very little overlap in community composition between different sample sites. They were even able to collect samples from Kilauea. Interestingly, older lava tubes (500–800 years old) showed greater phylogenetic diversity than younger or active geothermal sites, which I didn't expect; I would expect older sites just to be barren.
+
+What I found surprising is that I always think of volcanic environments as harsh and barren, but actually it's a very nutrient rich environment with lots of minerals. Previously, I learned from a microbiology class that deep-sea hydrothermal vents are major hotspots for microbial diversity. So when I think of volcanoes that are on land, I didn't expect that these environments would support such rich microbial communities.
+
+```{r leaflet-map, message=FALSE, warning=FALSE}
+
+library(leaflet)
+
+# Use cleaned column names
+mag_map <- mag |>
+  filter(!is.na(decimal_latitude), !is.na(decimal_longitude)) |>
+  distinct(genomics_sample_id, decimal_latitude, decimal_longitude, site_id)
+
+# Create a color palette by site
+pal <- colorFactor(palette = "Set2", domain = mag_map$site)
+
+# Build the map
+leaflet(mag_map) |>
+  addProviderTiles("CartoDB.Positron") |>
+  addCircleMarkers(
+    ~decimal_longitude, ~decimal_latitude,
+    radius = 5,
+    color = ~pal(site_id),
+    stroke = TRUE,
+    fillOpacity = 0.7,
+    label = ~paste0("Sample: ", genomics_sample_id, "<br>Site: ", site_id)
+  ) |>
+  addLegend(
+    "bottomright",
+    pal = pal,
+    values = ~site_id,
+    title = "NEON Sites",
+    opacity = 1
+  )
+```
+
+# Conclusion
+
+In this analysis, we explored MAG-based microbial communities across NEON sites using taxonomy, alpha diversity, and an interactive map showing where the samples were collected from.
